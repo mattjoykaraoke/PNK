@@ -1,0 +1,40 @@
+# =========================
+# Project Specific
+# =========================
+
+# Spotify / Environment variables
+.env
+.env.local
+
+# Spotipy Auth Cache
+.cache
+.cache-*
+
+# Output files (keeps your personal missing tracks list local)
+*.txt
+# Allow requirements.txt to be tracked despite the above rule
+!requirements.txt
+
+# =========================
+# Python Standard
+# =========================
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyw
+
+# Virtual Environments
+venv/
+.venv/
+env/
+.env/
+
+# OS & IDE Specific
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.bat
+*.iss
