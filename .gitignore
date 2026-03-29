@@ -14,6 +14,7 @@
 *.txt
 # Allow requirements.txt to be tracked despite the above rule
 !requirements.txt
+!THIRD_PARTY_NOTICES.txt
 
 # =========================
 # Python Standard

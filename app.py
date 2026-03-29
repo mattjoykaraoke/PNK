@@ -370,6 +370,20 @@ class PNKApp:
         ).pack()
         tk.Label(
             dlg,
+            text="This software uses open-source components.",
+            font=font_normal,
+            fg=fg_normal,
+            bg=bg_color,
+        ).pack()
+        tk.Label(
+            dlg,
+            text="See licenses folder for details.",
+            font=font_normal,
+            fg=fg_normal,
+            bg=bg_color,
+        ).pack()
+        tk.Label(
+            dlg,
             text="Inspired by Deastrom.",
             font=font_normal,
             fg=fg_normal,
