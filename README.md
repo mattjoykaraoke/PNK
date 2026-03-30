@@ -36,7 +36,7 @@ ________________________________________________________________________________
 
 **1. Clone the repository and install dependencies:**
 ```bash
-git clone [https://github.com/mattjoykaraoke/PNK.git](https://github.com/mattjoykaraoke/PNK.git)
+git clone https://github.com/mattjoykaraoke/PNK.git
 cd PNK
 pip install -r requirements.txt
 ```
@@ -51,7 +51,7 @@ You will need to create a developer application on the [Spotify Developer Dashbo
 ```text
 SPOTIPY_CLIENT_ID=your_client_id_here
 SPOTIPY_CLIENT_SECRET=your_client_secret_here
-SPOTIPY_REDIRECT_URI=[http://127.0.0.1:8080](http://127.0.0.1:8080)
+SPOTIPY_REDIRECT_URI=http://127.0.0.1:8080
 ```
 
 **3. Run the App:**
