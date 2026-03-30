@@ -36,13 +36,7 @@ class PNKApp:
         control_frame = ttk.Frame(self.root, padding="10")
         control_frame.pack(fill=tk.X)
 
-        # Row 1: Connect
-        self.connect_btn = ttk.Button(
-            control_frame, text="1. Connect to Spotify", command=self.connect_spotify
-        )
-        self.connect_btn.grid(row=0, column=0, sticky=tk.W, pady=5)
-
-        # Row 1: Connect & About
+        # Row 0: Connect & About
         self.connect_btn = ttk.Button(
             control_frame, text="1. Connect to Spotify", command=self.connect_spotify
         )
@@ -51,16 +45,27 @@ class PNKApp:
         self.about_btn = ttk.Button(
             control_frame, text="About PNK", command=self.show_about
         )
-        self.about_btn.grid(row=0, column=1, sticky=tk.E, padx=5, pady=5)
+        self.about_btn.grid(row=0, column=3, sticky=tk.E, padx=5, pady=5)
 
-        # Row 2: Playlist Selection (Disabled initially)
+        # Row 1: Playlist Selection & Search Scope
         ttk.Label(control_frame, text="Select Playlist:").grid(
             row=1, column=0, sticky=tk.W, pady=5
         )
-        self.playlist_combo = ttk.Combobox(control_frame, width=40, state=tk.DISABLED)
+
+        # This is the ONLY playlist combo that should exist
+        self.playlist_combo = ttk.Combobox(control_frame, width=35, state=tk.DISABLED)
         self.playlist_combo.grid(row=1, column=1, sticky=tk.W, padx=5, pady=5)
 
-        # Row 3: Start Check (Disabled initially)
+        ttk.Label(control_frame, text="Search Scope:").grid(
+            row=1, column=2, sticky=tk.W, padx=(15, 5), pady=5
+        )
+
+        self.scope_combo = ttk.Combobox(control_frame, width=15, state="readonly")
+        self.scope_combo["values"] = ("Everything", "Web Only", "Community Only")
+        self.scope_combo.current(0)
+        self.scope_combo.grid(row=1, column=3, sticky=tk.W, pady=5)
+
+        # Row 2: Start Check
         self.start_btn = ttk.Button(
             control_frame,
             text="2. Start Karaoke Check",
@@ -213,6 +218,13 @@ class PNKApp:
         return " ".join(clean_title.split())
 
     def check_karaoke_nerds(self, songs):
+        # Map the UI selection to the URL parameter
+        scope_map = {
+            "Everything": "All",
+            "Web Only": "OnlyWeb",
+            "Community Only": "OnlyCommunity",
+        }
+        selected_scope = scope_map.get(self.scope_combo.get(), "All")
         missing_songs = []
         total = len(songs)
         self.progress["maximum"] = total
@@ -226,7 +238,7 @@ class PNKApp:
 
             clean_title = self.clean_title_only(spotify_title)
             query_url = urllib.parse.quote_plus(clean_title)
-            url = f"https://karaokenerds.com/Search?query={query_url}"
+            url = f"https://karaokenerds.com/Search?query={query_url}&webFilter={selected_scope}"
 
             try:
                 response = requests.get(url)
@@ -352,7 +364,7 @@ class PNKApp:
 
         # Additional Info
         tk.Label(
-            dlg, text="\nVersion 1.0.0.", font=font_normal, fg=fg_normal, bg=bg_color
+            dlg, text="\nVersion 1.1.0.", font=font_normal, fg=fg_normal, bg=bg_color
         ).pack()
         tk.Label(
             dlg,
