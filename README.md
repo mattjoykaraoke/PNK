@@ -24,7 +24,7 @@ ________________________________________________________________________________
 ### ✨ What It Does
 PNK eliminates the manual work of searching for karaoke availability. 
 
-* 🎵 **Playlist Selection:** Dynamically pulls your custom Spotify playlists and "Saved Tracks".
+* 🎵 **Playlist Selection:** Dynamically pulls your custom Spotify playlists and "Saved Tracks". For YouTube, you will need to provide the link to a 'public' or 'unlisted' playlist. To check your YouTube 'Liked Music', just batch-select your songs, add them to an unlisted playlist, and paste the link.
 * 🧠 **Fuzzy Logic Matching:** Uses `BeautifulSoup` and `difflib` to intelligently match artists and bypass strict search engine formatting (like "feat." tags).
 * 📝 **Targeted Output:** Generates a `missing_karaoke_tracks.txt` file containing ONLY the songs that yielded zero matches.
 * 🎚 **GUI Progress:** Features a clean, threaded user interface so you can monitor the search progress in real-time.
@@ -53,6 +53,7 @@ SPOTIPY_CLIENT_ID=your_client_id_here
 SPOTIPY_CLIENT_SECRET=your_client_secret_here
 SPOTIPY_REDIRECT_URI=http://127.0.0.1:8080
 ```
+No specific authentication is required for YouTube
 
 **3. Run the App:**
 ```bash
@@ -63,7 +64,7 @@ ________________________________________________________________________________
 
 ### 🚫 What It Does NOT Do
 * Does not download karaoke files.
-* Does not modify your Spotify playlists or saved tracks.
+* Does not modify your Spotify or YouTube playlists or saved tracks.
 * Does not share your authentication keys (always keep your `.env` file local!).
 
 __________________________________________________________________________________________
@@ -74,6 +75,7 @@ PNK is built with:
 * **Tkinter** (Native Python GUI)
 * **Requests & BeautifulSoup4** (Web Scraping & DOM Parsing)
 * **Spotipy** (Data Extraction)
+* **ytmusicapi** (Web Scraping)
 * **Difflib** (Fuzzy String Matching)
 
 __________________________________________________________________________________________

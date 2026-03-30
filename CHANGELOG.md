@@ -2,6 +2,18 @@
 
 All notable changes to PNK will be documented in this file.
 
+## [1.2.1] - 2026-03-30
+
+### Added
+**YouTube Music Playlists:** You can now paste a 'public' or 'unlisted' YouTube Playlist into the box and it will work.
+
+### Changed
+**Spotify Permissions:** Expanded the Spotify authentication scopes (added playlist-read-collaborative and playlist-read-public) to ensure collaborative, shared, and public playlists can be fully read without 403 Forbidden errors.
+
+### Fixed
+**Empty Playlist Bug:** Resolved a critical issue where some playlists falsely reported "No songs found" by overhauling the track extraction logic to aggressively capture nested track items regardless of their specific type formatting.
+
+
 ## [1.1.1] - 2026-03-29
 
 ### Added

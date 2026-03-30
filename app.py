@@ -24,13 +24,12 @@ class PNKApp:
     def __init__(self, root):
         self.root = root
         self.root.title("PNK: Playlist Needing Karaoke")
-        self.root.geometry(
-            "650x650"
-        )  # Increased height for status labels and log space
+        self.root.geometry("650x680")  # Increased height for YouTube URL row
 
         self.sp = None
         self.playlists_map = {}
         self.is_running = False
+        self.active_source = "spotify"
 
         self.setup_ui()
 
@@ -51,7 +50,7 @@ class PNKApp:
         self.about_btn.grid(row=0, column=3, sticky=tk.E, padx=5, pady=5)
 
         # Row 1: Playlist Selection & Search Scope
-        ttk.Label(control_frame, text="Select Playlist:").grid(
+        ttk.Label(control_frame, text="Spotify Playlist:").grid(
             row=1, column=0, sticky=tk.W, pady=5
         )
 
@@ -70,9 +69,22 @@ class PNKApp:
         self.scope_combo.current(0)
         self.scope_combo.grid(row=1, column=3, sticky=tk.W, pady=5)
 
-        # Row 2: Status Row (Songs count and ETR)
+        # Row 2: YouTube Music Integration
+        ttk.Label(control_frame, text="OR YouTube URL:").grid(
+            row=2, column=0, sticky=tk.W, pady=5
+        )
+
+        self.yt_url_entry = ttk.Entry(control_frame, width=37)
+        self.yt_url_entry.grid(row=2, column=1, sticky=tk.W, padx=5, pady=5)
+
+        self.load_yt_btn = ttk.Button(
+            control_frame, text="Load URL", command=self.load_yt_playlist
+        )
+        self.load_yt_btn.grid(row=2, column=2, sticky=tk.W, padx=(15, 5), pady=5)
+
+        # Row 3: Status Row (Songs count and ETR)
         status_info_frame = ttk.Frame(control_frame)
-        status_info_frame.grid(row=2, column=0, columnspan=4, sticky=tk.W, pady=2)
+        status_info_frame.grid(row=3, column=0, columnspan=4, sticky=tk.W, pady=2)
 
         self.song_count_lbl = ttk.Label(
             status_info_frame, text="Songs: 0", font=("Segoe UI", 9, "bold")
@@ -84,14 +96,14 @@ class PNKApp:
         )
         self.etr_lbl.pack(side=tk.LEFT)
 
-        # Row 3: Start Check
+        # Row 4: Start Check
         self.start_btn = ttk.Button(
             control_frame,
             text="2. Start Karaoke Check",
             command=self.start_thread,
             state=tk.DISABLED,
         )
-        self.start_btn.grid(row=3, column=0, columnspan=2, sticky=tk.W, pady=10)
+        self.start_btn.grid(row=4, column=0, columnspan=2, sticky=tk.W, pady=10)
 
         # Progress Bar
         self.progress = ttk.Progressbar(
@@ -179,6 +191,9 @@ class PNKApp:
 
     def on_playlist_selected(self, event):
         """Updates the UI with track count and initial ETR when playlist changes."""
+        self.active_source = "spotify"
+        self.yt_url_entry.delete(0, tk.END)
+
         selected_name = self.playlist_combo.get()
         playlist_id = self.playlists_map.get(selected_name)
 
@@ -209,6 +224,58 @@ class PNKApp:
 
         threading.Thread(target=update_task, daemon=True).start()
 
+    def load_yt_playlist(self):
+        url = self.yt_url_entry.get().strip()
+        if not url:
+            self.log("Please enter a YouTube Music playlist URL.")
+            return
+
+        parsed = urllib.parse.urlparse(url)
+        query = urllib.parse.parse_qs(parsed.query)
+        playlist_id = query.get("list", [None])[0]
+
+        if not playlist_id:
+            self.log("Invalid URL. Could not find a 'list' ID in the URL.")
+            return
+
+        self.active_source = "youtube"
+        self.playlist_combo.set("")  # Clear Spotify visual selection
+        self.log(f"Loading YouTube playlist ID: {playlist_id}...")
+
+        def update_task():
+            try:
+                import ytmusicapi
+
+                ytmusic = ytmusicapi.YTMusic()
+                playlist = ytmusic.get_playlist(playlist_id, limit=None)
+
+                total_songs = len(playlist.get("tracks", []))
+                self.song_count_lbl.config(text=f"Songs: {total_songs}")
+
+                seconds = int(total_songs * 1.7)
+                mins, secs = divmod(seconds, 60)
+                self.etr_lbl.config(text=f"Est. Time: {mins}m {secs:02d}s")
+
+                self.log(
+                    f"✅ Loaded YouTube playlist: '{playlist.get('title', 'Unknown')}'"
+                )
+                self.start_btn.config(state=tk.NORMAL)
+            except ImportError:
+                self.log("❌ Missing library: ytmusicapi is not installed.")
+                self.log("Please run this in your terminal: pip install ytmusicapi")
+            except Exception as e:
+                self.song_count_lbl.config(text="Songs: [Blocked]")
+                self.etr_lbl.config(text="Est. Time: N/A")
+                self.log(
+                    "\n❌ YouTube Music blocked access to this playlist or it is Private."
+                )
+                self.log(
+                    "Note: To check your 'Liked Music', batch-select them, add them to a new 'Unlisted' playlist, and paste that link here."
+                )
+                self.log(f"Details: {str(e)}")
+
+        threading.Thread(target=update_task, daemon=True).start()
+
     def start_thread(self):
         if self.is_running:
             return
@@ -216,6 +283,8 @@ class PNKApp:
         self.start_btn.config(state=tk.DISABLED)
         self.connect_btn.config(state=tk.DISABLED)
         self.playlist_combo.config(state=tk.DISABLED)
+        self.yt_url_entry.config(state=tk.DISABLED)
+        self.load_yt_btn.config(state=tk.DISABLED)
         self.progress["value"] = 0
         self.log_area.delete(1.0, tk.END)
 
@@ -223,20 +292,62 @@ class PNKApp:
 
     def run_process(self):
         try:
-            songs = self.get_playlist_tracks()
+            songs = []
+            playlist_title_for_file = ""
+
+            if self.active_source == "youtube":
+                songs, playlist_title_for_file = self.get_yt_playlist_tracks()
+            else:
+                songs = self.get_playlist_tracks()
+                playlist_title_for_file = self.playlist_combo.get()
 
             if not songs:
-                self.log("No songs found in this playlist.")
+                self.log("No songs found to check.")
                 self.reset_ui()
                 return
 
             self.log(f"Fetched {len(songs)} total tracks. Cross-referencing...\n")
-            self.check_karaoke_nerds(songs)
+            self.check_karaoke_nerds(songs, playlist_title_for_file)
 
         except Exception as e:
             self.log(f"An error occurred: {str(e)}")
         finally:
             self.reset_ui()
+
+    def get_yt_playlist_tracks(self):
+        url = self.yt_url_entry.get().strip()
+        parsed = urllib.parse.urlparse(url)
+        query = urllib.parse.parse_qs(parsed.query)
+        playlist_id = query.get("list", [None])[0]
+
+        if not playlist_id:
+            return [], ""
+
+        self.log(f"Accessing YouTube playlist items...")
+        try:
+            import ytmusicapi
+
+            ytmusic = ytmusicapi.YTMusic()
+            playlist = ytmusic.get_playlist(playlist_id, limit=None)
+
+            songs = []
+            for track in playlist.get("tracks", []):
+                title = track.get("title", "Unknown Title")
+                artists_data = track.get("artists", [])
+                artist = "Unknown Artist"
+                if artists_data and isinstance(artists_data, list):
+                    artist = artists_data[0].get("name", "Unknown Artist")
+
+                original_name = f"{artist} - {title}"
+                songs.append(
+                    {"original": original_name, "artist": artist, "title": title}
+                )
+
+            return songs, playlist.get("title", "YouTube_Playlist")
+        except Exception as e:
+            self.log("\n❌ YouTube Music blocked access to this playlist.")
+            self.log("Note: Make sure the playlist is set to 'Public' or 'Unlisted'.")
+            return [], ""
 
     def get_playlist_tracks(self):
         selected_name = self.playlist_combo.get()
@@ -330,7 +441,7 @@ class PNKApp:
         clean_title = re.sub(r"[^\w\s]", " ", clean_title)
         return " ".join(clean_title.split())
 
-    def check_karaoke_nerds(self, songs):
+    def check_karaoke_nerds(self, songs, playlist_title="Playlist"):
         scope_map = {
             "Everything": "All",
             "Web Only": "OnlyWeb",
@@ -387,8 +498,9 @@ class PNKApp:
         self.etr_lbl.config(text="Est. Remaining: 0m 00s")
         if missing_songs:
             # Grab the playlist name and sanitize it for a valid filename
-            playlist_name = self.playlist_combo.get()
-            safe_name = re.sub(r'[\\/*?:"<>|]', "", playlist_name).replace(" ", "_")
+            safe_name = re.sub(r'[\\/*?:"<>|]', "", playlist_title).replace(" ", "_")
+            if not safe_name:
+                safe_name = "Karaoke_Check"
             filename = f"missing_{safe_name}.txt"
 
             with open(filename, "w", encoding="utf-8") as f:
@@ -404,6 +516,8 @@ class PNKApp:
         self.start_btn.config(state=tk.NORMAL)
         self.connect_btn.config(state=tk.NORMAL)
         self.playlist_combo.config(state="readonly")
+        self.yt_url_entry.config(state=tk.NORMAL)
+        self.load_yt_btn.config(state=tk.NORMAL)
 
     def show_about(self):
         dlg = tk.Toplevel(self.root)
@@ -476,7 +590,7 @@ class PNKApp:
         )
 
         tk.Label(
-            dlg, text="\nVersion 1.1.0.", font=font_normal, fg=fg_normal, bg=bg_color
+            dlg, text="\nVersion 1.2.1.", font=font_normal, fg=fg_normal, bg=bg_color
         ).pack()
         tk.Label(
             dlg,

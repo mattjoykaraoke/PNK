@@ -3,3 +3,4 @@ beautifulsoup4
 spotipy
 python-dotenv
 pillow
+ytmusicapi
