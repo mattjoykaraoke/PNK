@@ -23,7 +23,9 @@ class PNKApp:
     def __init__(self, root):
         self.root = root
         self.root.title("PNK: Playlist Needing Karaoke")
-        self.root.geometry("650x550")
+        self.root.geometry(
+            "650x650"
+        )  # Increased height for status labels and log space
 
         self.sp = None
         self.playlists_map = {}
@@ -52,27 +54,43 @@ class PNKApp:
             row=1, column=0, sticky=tk.W, pady=5
         )
 
-        # This is the ONLY playlist combo that should exist
         self.playlist_combo = ttk.Combobox(control_frame, width=35, state=tk.DISABLED)
         self.playlist_combo.grid(row=1, column=1, sticky=tk.W, padx=5, pady=5)
+        # Bind selection change to update stats immediately
+        self.playlist_combo.bind("<<ComboboxSelected>>", self.on_playlist_selected)
 
         ttk.Label(control_frame, text="Search Scope:").grid(
             row=1, column=2, sticky=tk.W, padx=(15, 5), pady=5
         )
 
-        self.scope_combo = ttk.Combobox(control_frame, width=15, state="readonly")
+        # Increased width from 15 to 18 so "Community Only" isn't cut off by DPI scaling
+        self.scope_combo = ttk.Combobox(control_frame, width=18, state="readonly")
         self.scope_combo["values"] = ("Everything", "Web Only", "Community Only")
         self.scope_combo.current(0)
         self.scope_combo.grid(row=1, column=3, sticky=tk.W, pady=5)
 
-        # Row 2: Start Check
+        # Row 2: Status Row (Songs count and ETR)
+        status_info_frame = ttk.Frame(control_frame)
+        status_info_frame.grid(row=2, column=0, columnspan=4, sticky=tk.W, pady=2)
+
+        self.song_count_lbl = ttk.Label(
+            status_info_frame, text="Songs: 0", font=("Segoe UI", 9, "bold")
+        )
+        self.song_count_lbl.pack(side=tk.LEFT, padx=(0, 20))
+
+        self.etr_lbl = ttk.Label(
+            status_info_frame, text="Est. Time: --:--", font=("Segoe UI", 9)
+        )
+        self.etr_lbl.pack(side=tk.LEFT)
+
+        # Row 3: Start Check
         self.start_btn = ttk.Button(
             control_frame,
             text="2. Start Karaoke Check",
             command=self.start_thread,
             state=tk.DISABLED,
         )
-        self.start_btn.grid(row=2, column=0, columnspan=2, sticky=tk.W, pady=10)
+        self.start_btn.grid(row=3, column=0, columnspan=2, sticky=tk.W, pady=10)
 
         # Progress Bar
         self.progress = ttk.Progressbar(
@@ -87,7 +105,7 @@ class PNKApp:
         self.log("Ready. Click 'Connect to Spotify' to load your playlists.")
 
     def log(self, message):
-        self.log_area.insert(tk.END, message + "\n")
+        self.log_area.insert(tk.END, str(message) + "\n")
         self.log_area.see(tk.END)
         self.root.update()
 
@@ -102,8 +120,10 @@ class PNKApp:
 
         try:
             self.log("Authenticating...")
-            # We need playlist-read-private to see your custom playlists
-            scope = "user-library-read playlist-read-private"
+            # Removed the invalid 'playlist-read-public' scope. Public playlists don't need a special scope!
+            scope = (
+                "user-library-read playlist-read-private playlist-read-collaborative"
+            )
             self.sp = spotipy.Spotify(auth_manager=SpotifyOAuth(scope=scope))
 
             user = self.sp.current_user()
@@ -123,22 +143,53 @@ class PNKApp:
             while results:
                 for item in results["items"]:
                     if item:
-                        self.playlists_map[item["name"]] = item["id"]
+                        name = item["name"]
+                        self.playlists_map[name] = item["id"]
                 if results["next"]:
                     results = self.sp.next(results)
                 else:
                     results = None
 
-            # Update UI
             self.playlist_combo["values"] = list(self.playlists_map.keys())
             self.playlist_combo.current(0)
             self.playlist_combo.config(state="readonly")
-
             self.start_btn.config(state=tk.NORMAL)
+
+            # Show stats for default playlist
+            self.on_playlist_selected(None)
+
             self.log(f"Loaded {len(self.playlists_map)} playlists. Ready to scan.")
 
         except Exception as e:
             self.log(f"Error fetching playlists: {e}")
+
+    def on_playlist_selected(self, event):
+        """Updates the UI with track count and initial ETR when playlist changes."""
+        selected_name = self.playlist_combo.get()
+        playlist_id = self.playlists_map.get(selected_name)
+
+        if not playlist_id:
+            return
+
+        def update_task():
+            try:
+                if playlist_id == "liked":
+                    results = self.sp.current_user_saved_tracks(limit=1)
+                else:
+                    results = self.sp.playlist_items(
+                        playlist_id, fields="total", limit=1
+                    )
+
+                total_songs = results.get("total", 0)
+                self.song_count_lbl.config(text=f"Songs: {total_songs}")
+
+                seconds = int(total_songs * 1.7)
+                mins, secs = divmod(seconds, 60)
+                self.etr_lbl.config(text=f"Est. Time: {mins}m {secs:02d}s")
+            except Exception:
+                self.song_count_lbl.config(text="Songs: --")
+
+        threading.Thread(target=update_task, daemon=True).start()
 
     def start_thread(self):
         if self.is_running:
@@ -161,9 +212,7 @@ class PNKApp:
                 self.reset_ui()
                 return
 
-            self.log(
-                f"Found {len(songs)} tracks. Cross-referencing with KaraokeNerds...\n"
-            )
+            self.log(f"Fetched {len(songs)} total tracks. Cross-referencing...\n")
             self.check_karaoke_nerds(songs)
 
         except Exception as e:
@@ -174,8 +223,11 @@ class PNKApp:
     def get_playlist_tracks(self):
         selected_name = self.playlist_combo.get()
         playlist_id = self.playlists_map.get(selected_name)
-
         songs = []
+        if not playlist_id:
+            return []
+
+        self.log(f"Accessing playlist items for: {selected_name}...")
         try:
             if playlist_id == "liked":
                 results = self.sp.current_user_saved_tracks(limit=50)
@@ -183,48 +235,83 @@ class PNKApp:
                 results = self.sp.playlist_items(playlist_id, limit=50)
 
             while results:
-                for item in results["items"]:
-                    track = item.get("track")
-                    # Skip local files or broken tracks that have no artist data
-                    if not track or not track.get("artists"):
+                items = results.get("items", [])
+
+                for item in items:
+                    if not item or not isinstance(item, dict):
                         continue
 
-                    artist = track["artists"][0]["name"]
-                    title = track["name"]
-                    original_name = f"{artist} - {title}"
+                    # 1. Flatten the structure aggressively
+                    # Spotify normally uses 'track', but some endpoints/playlists use 'item'
+                    track_data = item
+                    if "track" in item and isinstance(item["track"], dict):
+                        track_data = item["track"]
+                    elif "item" in item and isinstance(item["item"], dict):
+                        track_data = item["item"]
 
+                    # 2. Extract Artist
+                    artist = "Unknown Artist"
+                    artists_data = track_data.get("artists") or track_data.get("artist")
+
+                    if isinstance(artists_data, list) and len(artists_data) > 0:
+                        first_artist = artists_data[0]
+                        if isinstance(first_artist, dict):
+                            artist = first_artist.get("name", "Unknown Artist")
+                        else:
+                            artist = str(first_artist)
+                    elif isinstance(artists_data, str):
+                        artist = artists_data
+                    elif isinstance(artists_data, dict):
+                        artist = artists_data.get("name", "Unknown Artist")
+
+                    # 3. Extract Title
+                    title = track_data.get("name")
+                    if not title:
+                        # Fallback to checking the parent item just in case
+                        title = item.get("name")
+
+                    if not title or str(title).strip() == "" or str(title) == "None":
+                        title = "Unknown Title"
+                    else:
+                        title = str(title).strip()
+
+                    # Skip ONLY if we got absolutely nothing
+                    if artist == "Unknown Artist" and title == "Unknown Title":
+                        continue
+
+                    original_name = f"{artist} - {title}"
                     songs.append(
                         {"original": original_name, "artist": artist, "title": title}
                     )
 
-                if results["next"]:
+                # 4. Handle Pagination
+                if results.get("next"):
                     results = self.sp.next(results)
                 else:
                     results = None
+
             return songs
         except Exception as e:
             self.log(f"Error fetching tracks: {e}")
             return []
 
     def is_similar(self, a, b, threshold=0.6):
-        """Fuzzy string matching for the Artist column."""
         return SequenceMatcher(None, a.lower(), b.lower()).ratio() > threshold
 
     def clean_title_only(self, title):
-        """Strips out features and parentheses to get the core song title."""
         clean_title = re.sub(r"\(.*?\)|\[.*?\]", "", title)
         clean_title = re.sub(r"(?i)feat\..*|ft\..*", "", clean_title)
         clean_title = re.sub(r"[^\w\s]", " ", clean_title)
         return " ".join(clean_title.split())
 
     def check_karaoke_nerds(self, songs):
-        # Map the UI selection to the URL parameter
         scope_map = {
             "Everything": "All",
             "Web Only": "OnlyWeb",
             "Community Only": "OnlyCommunity",
         }
         selected_scope = scope_map.get(self.scope_combo.get(), "All")
+
         missing_songs = []
         total = len(songs)
         self.progress["maximum"] = total
@@ -233,6 +320,11 @@ class PNKApp:
             original_name = song_data["original"]
             spotify_artist = song_data["artist"]
             spotify_title = song_data["title"]
+
+            remaining = total - i
+            est_seconds = int(remaining * 1.7)
+            mins, secs = divmod(est_seconds, 60)
+            self.etr_lbl.config(text=f"Est. Remaining: {mins}m {secs:02d}s")
 
             self.log(f"Checking: {original_name}")
 
@@ -245,15 +337,11 @@ class PNKApp:
                 soup = BeautifulSoup(response.text, "html.parser")
                 found_match = False
 
-                # Check the results table
                 rows = soup.find_all("tr")
                 for row in rows:
                     cols = row.find_all("td")
                     if len(cols) >= 2:
-                        kn_title = cols[0].text.strip()
                         kn_artist = cols[1].text.strip()
-
-                        # Fuzzy match the artist to confirm it's the right song
                         if self.is_similar(spotify_artist, kn_artist):
                             found_match = True
                             break
@@ -270,11 +358,17 @@ class PNKApp:
             self.progress["value"] = i + 1
             time.sleep(1.5)
 
+        self.etr_lbl.config(text="Est. Remaining: 0m 00s")
         if missing_songs:
-            with open("missing_karaoke_tracks.txt", "w", encoding="utf-8") as f:
+            # Grab the playlist name and sanitize it for a valid filename
+            playlist_name = self.playlist_combo.get()
+            safe_name = re.sub(r'[\\/*?:"<>|]', "", playlist_name).replace(" ", "_")
+            filename = f"missing_{safe_name}.txt"
+
+            with open(filename, "w", encoding="utf-8") as f:
                 f.write("\n".join(missing_songs))
             self.log(
-                f"\nFinished! {len(missing_songs)} missing tracks saved to 'missing_karaoke_tracks.txt'."
+                f"\nFinished! {len(missing_songs)} missing tracks saved to '{filename}'."
             )
         else:
             self.log("\nFinished! Everything in this playlist has a karaoke version.")
@@ -286,36 +380,26 @@ class PNKApp:
         self.playlist_combo.config(state="readonly")
 
     def show_about(self):
-        # Create a modal dialog
         dlg = tk.Toplevel(self.root)
         dlg.title("About PNK")
         dlg.configure(bg="#1E1E1E")
         dlg.resizable(False, False)
-
-        # Make it modal (blocks interacting with the main window)
         dlg.transient(self.root)
         dlg.grab_set()
 
-        # Styles
         font_normal = ("Segoe UI", 10)
         bg_color = "#1E1E1E"
         fg_normal = "white"
         fg_link = "#708090"
 
-        # --- Logo ---
         try:
-            # Assumes you have an assets folder with a logo like in ChromaLyric
             img = Image.open("assets/PNKLogo.png")
-            # Scales the image smoothly while keeping aspect ratio
             img.thumbnail((520, 220), Image.Resampling.LANCZOS)
             photo = ImageTk.PhotoImage(img)
             logo_lbl = tk.Label(dlg, image=photo, bg=bg_color)
-            logo_lbl.image = (
-                photo  # Keep a reference so it doesn't get garbage collected
-            )
+            logo_lbl.image = photo
             logo_lbl.pack(pady=(16, 5), padx=16)
         except Exception:
-            # Fallback text if the image doesn't exist yet
             tk.Label(
                 dlg,
                 text="🎤 PNK",
@@ -324,7 +408,6 @@ class PNKApp:
                 bg=bg_color,
             ).pack(pady=(16, 5))
 
-        # --- Text Content ---
         tk.Label(
             dlg,
             text="Vibe Coded in 2026 by Matt Joy.",
@@ -333,7 +416,6 @@ class PNKApp:
             bg=bg_color,
         ).pack()
 
-        # Clickable YouTube Link
         yt_link = tk.Label(
             dlg,
             text="youtube.com/@MattJoyKaraoke",
@@ -348,7 +430,6 @@ class PNKApp:
             lambda e: webbrowser.open("https://www.youtube.com/@MattJoyKaraoke"),
         )
 
-        # Clickable GitHub Link
         gh_link = tk.Label(
             dlg,
             text="github.com/mattjoykaraoke",
@@ -362,7 +443,6 @@ class PNKApp:
             "<Button-1>", lambda e: webbrowser.open("https://github.com/mattjoykaraoke")
         )
 
-        # Additional Info
         tk.Label(
             dlg, text="\nVersion 1.1.0.", font=font_normal, fg=fg_normal, bg=bg_color
         ).pack()
@@ -402,8 +482,6 @@ class PNKApp:
             bg=bg_color,
         ).pack()
 
-        # --- OK Button ---
-        # Using a standard tk.Button here to easily force the dark mode styling
         ok_btn = tk.Button(
             dlg,
             text="OK",
@@ -419,7 +497,6 @@ class PNKApp:
         )
         ok_btn.pack(pady=(20, 16))
 
-        # Center the dialog window relative to the main app window
         dlg.update_idletasks()
         x = (
             self.root.winfo_x()
