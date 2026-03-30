@@ -120,11 +120,24 @@ class PNKApp:
 
         try:
             self.log("Authenticating...")
-            # Removed the invalid 'playlist-read-public' scope. Public playlists don't need a special scope!
             scope = (
                 "user-library-read playlist-read-private playlist-read-collaborative"
             )
-            self.sp = spotipy.Spotify(auth_manager=SpotifyOAuth(scope=scope))
+
+            # Setup a safe, writable directory in the user's home folder for the cache
+            app_dir = os.path.join(os.path.expanduser("~"), ".pnk_app")
+            os.makedirs(app_dir, exist_ok=True)
+            cache_path = os.path.join(app_dir, ".spotify_cache")
+
+            auth_manager = SpotifyOAuth(scope=scope, cache_path=cache_path)
+
+            # Force the initial token fetch (opens browser if logging in for the first time)
+            auth_manager.get_access_token(as_dict=False)
+
+            # CRITICAL FIX: Disable Spotipy from opening browsers in the background ever again
+            auth_manager.open_browser = False
+
+            self.sp = spotipy.Spotify(auth_manager=auth_manager)
 
             user = self.sp.current_user()
             self.log(f"✅ Connected as: {user.get('display_name', 'User')}")
@@ -186,8 +199,12 @@ class PNKApp:
                 seconds = int(total_songs * 1.7)
                 mins, secs = divmod(seconds, 60)
                 self.etr_lbl.config(text=f"Est. Time: {mins}m {secs:02d}s")
-            except Exception:
-                self.song_count_lbl.config(text="Songs: --")
+            except Exception as e:
+                if "403" in str(e):
+                    self.song_count_lbl.config(text="Songs: [Blocked]")
+                    self.etr_lbl.config(text="Est. Time: N/A")
+                else:
+                    self.song_count_lbl.config(text="Songs: --")
 
         threading.Thread(target=update_task, daemon=True).start()
 
@@ -292,7 +309,15 @@ class PNKApp:
 
             return songs
         except Exception as e:
-            self.log(f"Error fetching tracks: {e}")
+            if "403" in str(e) and "Forbidden" in str(e):
+                self.log(
+                    "\n❌ Spotify blocked access to this playlist (403 Forbidden)."
+                )
+                self.log(
+                    "Note: Spotify completely prevents 3rd-party apps from reading 'Blend' playlists, personalized algorithmic playlists, and restricted private playlists."
+                )
+            else:
+                self.log(f"Error fetching tracks: {e}")
             return []
 
     def is_similar(self, a, b, threshold=0.6):
