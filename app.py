@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import threading
 import time
 import tkinter as tk
@@ -418,7 +419,13 @@ class PNKApp:
         fg_link = "#708090"
 
         try:
-            img = Image.open("assets/PNKLogo.png")
+            # Bulletproof cross-platform path resolution (works for source code and PyInstaller)
+            base_path = getattr(
+                sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__))
+            )
+            logo_path = os.path.join(base_path, "assets", "PNKLogo.png")
+
+            img = Image.open(logo_path)
             img.thumbnail((520, 220), Image.Resampling.LANCZOS)
             photo = ImageTk.PhotoImage(img)
             logo_lbl = tk.Label(dlg, image=photo, bg=bg_color)

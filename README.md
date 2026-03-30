@@ -40,7 +40,7 @@ git clone https://github.com/mattjoykaraoke/PNK.git
 cd PNK
 pip install -r requirements.txt
 ```
-Or, download the latest release.
+For Windows, you can just download the latest release.
 
 **2. Authenticate with Spotify:**
 You will need to create a developer application on the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard). 
