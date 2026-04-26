@@ -8,7 +8,7 @@ All notable changes to PNK will be documented in this file.
 **Modularization:** The code is now broken into smaller, more manageable files.
 **PySide6:** The UI is now built with PySide6 instead of Tkinter.
 **Cancel Button:** You can now cancel the scan while it is running.
-**SQLite Storage:** The app now stores your Spotify data in a local SQLite database to avoid rescanning Karaoke Nerds for songs you've already scanned.
+**SQLite Storage:** The app now stores your Spotify data in a local SQLite database to avoid rescanning Karaoke Nerds for songs you've already scanned. The database is deleted after 7 days for songs not found because of rapid updates to Karaoke Nerds website.
 
 ## [1.2.1] - 2026-03-30
 
