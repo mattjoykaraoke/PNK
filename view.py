@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
     QPushButton, QComboBox, QLineEdit, QProgressBar, QTextEdit,
     QDialog
 )
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QPixmap, QIcon
 from PySide6.QtCore import Qt
 
 class MainView(QMainWindow):
@@ -14,6 +14,11 @@ class MainView(QMainWindow):
         self.version = version
         self.setWindowTitle(f"PNK: Playlist Needing Karaoke v{self.version}")
         self.resize(700, 750)
+        
+        base_path = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+        icon_path = os.path.join(base_path, "assets", "PNKIco.ico")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
         
         self.setup_ui()
 
