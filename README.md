@@ -72,7 +72,7 @@ ________________________________________________________________________________
 ### 🧱 Technology
 PNK is built with:
 * **Python**
-* **Tkinter** (Native Python GUI)
+* **PySide6**
 * **Requests & BeautifulSoup4** (Web Scraping & DOM Parsing)
 * **Spotipy** (Data Extraction)
 * **ytmusicapi** (Web Scraping)
